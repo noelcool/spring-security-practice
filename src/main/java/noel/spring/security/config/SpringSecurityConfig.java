@@ -2,11 +2,13 @@ package noel.spring.security.config;
 
 import lombok.RequiredArgsConstructor;
 import noel.spring.security.user.User;
+import noel.spring.security.user.UserNotFoundException;
 import noel.spring.security.user.UserService;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -14,6 +16,8 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+
+import java.util.Arrays;
 
 /**
  * Security 설정 Config
@@ -27,48 +31,46 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        // basic authentication
-        http.httpBasic().disable(); // basic authentication filter 비활성화
-        // csrf
+        // basic authentication filter
+        http.httpBasic().disable();
+
+        //csrf
         http.csrf();
-        // remember-me
+
+        // rememberMeAuthenticationFilter
         http.rememberMe();
+
         // authorization
         http.authorizeRequests()
-                // /와 /home은 모두에게 허용
-                .antMatchers("/", "/home", "/signup").permitAll()
-                // hello 페이지는 USER 롤을 가진 유저에게만 허용
-                .antMatchers("/note").hasRole("USER")
-                .antMatchers("/admin").hasRole("ADMIN")
-                .antMatchers(HttpMethod.POST, "/notice").hasRole("ADMIN")
-                .antMatchers(HttpMethod.DELETE, "/notice").hasRole("ADMIN")
+                .antMatchers("/", "/home", "/signup").permitAll()// /, /home, /signup
+                .antMatchers("/note").hasRole("USER") // user 권한인 경우
+                .antMatchers("/admin").hasRole("ADMIN") // admin 권한인 경우
+                //.antMatchers(HttpMethod.GET, "/notice").authenticated() // 인증 받은 사람만, anyREquest().authenticated()가 있기 때문에 생략 가능
+                .antMatchers(HttpMethod.POST, "/notice").hasRole("ADMIN") // admin 권한이 있는 경우만 추가, 수정 가능
+                .antMatchers(HttpMethod.DELETE, "/notice").hasRole("ADMIN") // admin 권한이 있는 경우만 추가, 삭제 가능
                 .anyRequest().authenticated();
+
         // login
-        http.formLogin()
-                .loginPage("/login")
-                .defaultSuccessUrl("/")
-                .permitAll(); // 모두 허용
-        // logout
+        http.formLogin() // formLogin 활성화
+                .loginPage("/login") // 로그인 경로
+                .defaultSuccessUrl("/") // 로그인 성공시
+                .permitAll();
+
         http.logout()
-                .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
-                .logoutSuccessUrl("/");
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout")) //로그아웃 경로
+                .logoutSuccessUrl("/"); // 로그아웃 성공시
     }
 
     @Override
-    public void configure(WebSecurity web) {
-        // 정적 리소스 spring security 대상에서 제외
-//        web.ignoring().antMatchers("/images/**", "/css/**"); // 아래 코드와 같은 코드입니다.
-        web.ignoring().requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+    public void configure(WebSecurity web) throws Exception {
+        web.ignoring()
+                .requestMatchers(PathRequest.toStaticResources().atCommonLocations());
+        // 정적 리소스를 다 ignore
     }
 
-    /**
-     * UserDetailsService 구현
-     *
-     * @return UserDetailsService
-     */
     @Bean
     @Override
-    public UserDetailsService userDetailsService() {
+    protected UserDetailsService userDetailsService() {
         return username -> {
             User user = userService.findByUsername(username);
             if (user == null) {
@@ -77,4 +79,5 @@ public class SpringSecurityConfig extends WebSecurityConfigurerAdapter {
             return user;
         };
     }
+
 }
